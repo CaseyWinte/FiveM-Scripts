@@ -77,9 +77,8 @@ Citizen.CreateThread(function()
                 end)
 
                 -- Wait for the animation to complete before applying the hat
-                Citizen.Wait(1200)
-
-                -- If the animation wasn't interrupted by drawing a weapon, apply the hat
+                Citizen.Wait(2000) -- Adjust this wait time to match the animation length
+                -- Reapply the hat after the animation is complete
                 if isPlayingAnimation then
                     SetPedPropIndex(playerPed, 0, hatModel, hatTexture, true) -- Apply the saved hat
                 end
