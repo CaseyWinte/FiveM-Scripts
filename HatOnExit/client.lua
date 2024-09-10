@@ -6,6 +6,7 @@ local hatTexture = nil
 local canReapplyHat = false -- Flag to allow reapplying the hat
 local doubleTapF = false -- Flag for detecting double tap of "F"
 local lastTapTime = 0 -- Time of the last "F" tap
+local hatRemoved = false -- Flag to control hat removal timing
 
 -- Function to display text on the screen
 function ShowHelpText(text)
@@ -37,24 +38,34 @@ Citizen.CreateThread(function()
         if isInVehicle and isInPoliceVehicle then
             isInEmergencyVehicle = true
             hasPlayedAnimation = false -- Reset animation trigger when entering the vehicle
+            hatRemoved = false -- Ensure the hat isn't prematurely removed
         end
 
         -- When the player exits an emergency vehicle
         if not isInVehicle and isInEmergencyVehicle and not hasPlayedAnimation and not isPlayingAnimation and not doubleTapF then
-            -- Save the current hat (if any)
-            hatModel = GetPedPropIndex(playerPed, 0) -- Save hat model
-            hatTexture = GetPedPropTextureIndex(playerPed, 0) -- Save hat texture
+            -- Forcefully remove the hat if it reappears by mistake
+            if not hatRemoved then
+                hatModel = GetPedPropIndex(playerPed, 0) -- Save hat model
+                hatTexture = GetPedPropTextureIndex(playerPed, 0) -- Save hat texture
 
-            -- Only proceed with the animation if the player is wearing a hat
+                -- Remove the hat if the player is wearing one
+                if hatModel ~= -1 then
+                    ClearPedProp(playerPed, 0) -- Remove the hat immediately
+                    hatRemoved = true -- Mark the hat as removed
+                end
+            else
+                ClearPedProp(playerPed, 0) -- Continuously clear the hat every frame to prevent it from appearing
+            end
+
+            Citizen.Wait(800) -- A short wait to ensure the player has fully exited the vehicle
+
+            -- Only proceed with the animation if the player was wearing a hat
             if hatModel ~= -1 then
                 isInEmergencyVehicle = false -- Reset the flag
                 isPlayingAnimation = true -- Prevent re-triggering the animation
                 canReapplyHat = false -- Reset the reapply flag
 
-                -- Remove the hat (or any head prop) on exit
-                ClearPedProp(playerPed, 0)
-
-                -- Start the helmet-wearing animation
+                -- Load the animation dictionary
                 RequestAnimDict("missheistdockssetup1hardhat@")
                 while not HasAnimDictLoaded("missheistdockssetup1hardhat@") do
                     Citizen.Wait(0)
@@ -77,7 +88,8 @@ Citizen.CreateThread(function()
                 end)
 
                 -- Wait for the animation to complete before applying the hat
-                Citizen.Wait(2000) -- Adjust this wait time to match the animation length
+                Citizen.Wait(1200) -- Adjust this wait time to match the animation length
+
                 -- Reapply the hat after the animation is complete
                 if isPlayingAnimation then
                     SetPedPropIndex(playerPed, 0, hatModel, hatTexture, true) -- Apply the saved hat
