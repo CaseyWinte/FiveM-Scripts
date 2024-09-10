@@ -7,6 +7,8 @@ local canReapplyHat = false -- Flag to allow reapplying the hat
 local doubleTapF = false -- Flag for detecting double tap of "F"
 local lastTapTime = 0 -- Time of the last "F" tap
 local hatRemoved = false -- Flag to control hat removal timing
+local wasInVehicleLastFrame = false -- Flag to detect vehicle exit more reliably
+local doubleTapCooldown = false -- Flag to track double-tap exit cooldown
 
 -- Function to display text on the screen
 function ShowHelpText(text)
@@ -17,7 +19,7 @@ end
 
 Citizen.CreateThread(function()
     while true do
-        Citizen.Wait(0) -- Prevent crashing by waiting every frame
+        Citizen.Wait(0)
 
         local playerPed = PlayerPedId() -- Get the player's Ped
         local isInVehicle = IsPedInAnyVehicle(playerPed, false) -- Check if the player is in a vehicle
@@ -28,22 +30,21 @@ Citizen.CreateThread(function()
         if IsControlJustReleased(0, 23) then -- 23 corresponds to the "F" key
             if currentTime - lastTapTime < 300 then -- Double-tap detection within 300ms
                 doubleTapF = true
+                doubleTapCooldown = true -- Set cooldown to avoid running the animation after re-entering the vehicle
+                Citizen.SetTimeout(2000, function()
+                    doubleTapCooldown = false -- Reset cooldown after 2 seconds
+                end)
             else
                 doubleTapF = false
             end
             lastTapTime = currentTime
         end
 
-        -- When the player is in an emergency vehicle
-        if isInVehicle and isInPoliceVehicle then
-            isInEmergencyVehicle = true
-            hasPlayedAnimation = false -- Reset animation trigger when entering the vehicle
-            hatRemoved = false -- Ensure the hat isn't prematurely removed
-        end
+        -- Check if the player has just exited the vehicle
+        if wasInVehicleLastFrame and not isInVehicle and isInEmergencyVehicle and not hasPlayedAnimation and not doubleTapF then
+            -- The player has just exited an emergency vehicle, so trigger the animation if double-tap F wasn't used
 
-        -- When the player exits an emergency vehicle
-        if not isInVehicle and isInEmergencyVehicle and not hasPlayedAnimation and not isPlayingAnimation and not doubleTapF then
-            -- Forcefully remove the hat if it reappears by mistake
+            -- Remove the hat if necessary
             if not hatRemoved then
                 hatModel = GetPedPropIndex(playerPed, 0) -- Save hat model
                 hatTexture = GetPedPropTextureIndex(playerPed, 0) -- Save hat texture
@@ -53,11 +54,10 @@ Citizen.CreateThread(function()
                     ClearPedProp(playerPed, 0) -- Remove the hat immediately
                     hatRemoved = true -- Mark the hat as removed
                 end
-            else
-                ClearPedProp(playerPed, 0) -- Continuously clear the hat every frame to prevent it from appearing
             end
 
-            Citizen.Wait(800) -- A short wait to ensure the player has fully exited the vehicle
+            -- Wait briefly to ensure the player has fully exited
+            Citizen.Wait(800)
 
             -- Only proceed with the animation if the player was wearing a hat
             if hatModel ~= -1 then
@@ -88,7 +88,7 @@ Citizen.CreateThread(function()
                 end)
 
                 -- Wait for the animation to complete before applying the hat
-                Citizen.Wait(1200) -- Adjust this wait time to match the animation length
+                Citizen.Wait(1200) -- Adjusted wait time to 1200ms
 
                 -- Reapply the hat after the animation is complete
                 if isPlayingAnimation then
@@ -100,6 +100,16 @@ Citizen.CreateThread(function()
                 isPlayingAnimation = false
             end
         end
+
+        -- Check if the player just entered a police/emergency vehicle
+        if isInVehicle and isInPoliceVehicle and not doubleTapCooldown then -- Ensure no animation runs after double-tap F
+            isInEmergencyVehicle = true
+            hasPlayedAnimation = false -- Reset animation trigger
+            hatRemoved = false -- Reset the hat removal flag
+        end
+
+        -- Update the `wasInVehicleLastFrame` flag to track vehicle entry and exit more reliably
+        wasInVehicleLastFrame = isInVehicle
 
         -- Show the message if the player can reapply their hat
         if canReapplyHat and hatModel ~= -1 then
