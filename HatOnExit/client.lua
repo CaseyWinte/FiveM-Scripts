@@ -1,4 +1,4 @@
-local isInEmergencyVehicle = false
+local isInAllowedVehicle = false
 local hasPlayedAnimation = false
 local isPlayingAnimation = false
 local hatModel = nil
@@ -10,11 +10,25 @@ local hatRemoved = false -- Flag to control hat removal timing
 local wasInVehicleLastFrame = false -- Flag to detect vehicle exit more reliably
 local doubleTapCooldown = false -- Flag to track double-tap exit cooldown
 
+-- Load the config
+local Config = Config or {}
+
 -- Function to display text on the screen
 function ShowHelpText(text)
     SetTextComponentFormat("STRING")
     AddTextComponentString(text)
     DisplayHelpTextFromStringLabel(0, 0, 1, -1)
+end
+
+-- Function to check if the vehicle is in the allowed list
+function IsAllowedVehicle(vehicle)
+    local model = GetEntityModel(vehicle)
+    for _, allowedModel in ipairs(Config.AllowedVehicles) do
+        if model == GetHashKey(allowedModel) then
+            return true
+        end
+    end
+    return false
 end
 
 Citizen.CreateThread(function()
@@ -23,7 +37,7 @@ Citizen.CreateThread(function()
 
         local playerPed = PlayerPedId() -- Get the player's Ped
         local isInVehicle = IsPedInAnyVehicle(playerPed, false) -- Check if the player is in a vehicle
-        local isInPoliceVehicle = IsPedInAnyPoliceVehicle(playerPed) -- Check if the player is in an emergency vehicle
+        local vehicle = GetVehiclePedIsIn(playerPed, false) -- Get the vehicle the player is in
         local currentTime = GetGameTimer() -- Get the current time for double-tap detection
 
         -- Detecting double-tap on "F" key
@@ -41,8 +55,8 @@ Citizen.CreateThread(function()
         end
 
         -- Check if the player has just exited the vehicle
-        if wasInVehicleLastFrame and not isInVehicle and isInEmergencyVehicle and not hasPlayedAnimation and not doubleTapF then
-            -- The player has just exited an emergency vehicle, so trigger the animation if double-tap F wasn't used
+        if wasInVehicleLastFrame and not isInVehicle and isInAllowedVehicle and not hasPlayedAnimation and not doubleTapF then
+            -- The player has just exited an allowed vehicle, so trigger the animation if double-tap F wasn't used
 
             -- Remove the hat if necessary
             if not hatRemoved then
@@ -61,7 +75,7 @@ Citizen.CreateThread(function()
 
             -- Only proceed with the animation if the player was wearing a hat
             if hatModel ~= -1 then
-                isInEmergencyVehicle = false -- Reset the flag
+                isInAllowedVehicle = false -- Reset the flag
                 isPlayingAnimation = true -- Prevent re-triggering the animation
                 canReapplyHat = false -- Reset the reapply flag
 
@@ -101,9 +115,9 @@ Citizen.CreateThread(function()
             end
         end
 
-        -- Check if the player just entered a police/emergency vehicle
-        if isInVehicle and isInPoliceVehicle and not doubleTapCooldown then -- Ensure no animation runs after double-tap F
-            isInEmergencyVehicle = true
+        -- Check if the player just entered an allowed vehicle
+        if isInVehicle and IsAllowedVehicle(vehicle) and not doubleTapCooldown then -- Ensure no animation runs after double-tap F
+            isInAllowedVehicle = true
             hasPlayedAnimation = false -- Reset animation trigger
             hatRemoved = false -- Reset the hat removal flag
         end
